@@ -1,0 +1,56 @@
+FROM centos:6
+
+RUN yum install -y \
+      wget \
+      rsync \
+      openssh-server && \
+    echo -e "Port 22\n" >> /etc/ssh/sshd_config && \
+    echo -e "PasswordAuthentication no\n" >> /etc/ssh/sshd_config && \
+    echo -e "ChallengeResponseAuthentication no\n" >> /etc/ssh/sshd_config && \
+    echo -e "PubkeyAuthentication yes\n" >> /etc/ssh/sshd_config && \
+    useradd cbrain && \
+    mkdir -p /home/cbrain/.ssh && \
+    touch /home/cbrain/.ssh/authorized_keys && \
+    chown cbrain:cbrain -R /home/cbrain/.ssh && \
+    chmod -R 700 /home/cbrain/.ssh
+
+##########################
+# Dockerize installation #
+##########################
+
+# Dockerize is used in run.sh to edit template configuration files and
+# to wait for the DB to be started before starting the portal
+
+ENV DOCKERIZE_VERSION v0.2.0
+RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz && \
+    tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
+
+#####################
+# Copy entry points #
+#####################
+
+COPY ./Docker/entry_points/data_provider.sh /home/cbrain/entry_points/
+COPY ./Docker/entry_points/data_provider_bootstrap.sh /home/cbrain/entry_points/
+COPY ./Docker/entry_points/functions.sh /home/cbrain/entry_points/
+RUN chown cbrain:cbrain -R /home/cbrain/entry_points
+
+#########################
+# Ports and entry point #
+#########################
+
+EXPOSE 22
+
+ENTRYPOINT ["/home/cbrain/entry_points/data_provider_bootstrap.sh"]
+CMD []
+
+###########
+# Volumes #
+###########
+#
+# /home/cbrain/data : data provider file directory.
+#
+# /home/cbrain/.portal_ssh: it should contains the public SSH key of CBrain portal.
+#
+
+VOLUME /home/cbrain/data \
+       /home/cbrain/.portal_ssh

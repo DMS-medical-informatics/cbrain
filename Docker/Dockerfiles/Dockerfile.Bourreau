@@ -1,0 +1,78 @@
+FROM mcin/cbrain
+
+USER root
+
+RUN yum install -y \
+      openssh-server && \
+    echo -e "Port 22\n" >> /etc/ssh/sshd_config && \
+    echo -e "PasswordAuthentication no\n" >> /etc/ssh/sshd_config && \
+    echo -e "ChallengeResponseAuthentication no\n" >> /etc/ssh/sshd_config && \
+    echo -e "PubkeyAuthentication yes\n" >> /etc/ssh/sshd_config
+
+USER cbrain
+
+################################
+# Rails application bundling   #
+################################
+
+# Note: bundling should be done before the CBRAIN code is copied,
+#       so that bundling is not redone everytime the code is updated.
+
+# Copy Gemfiles
+RUN mkdir -p ${HOME}/cbrain/Bourreau
+COPY ./Bourreau/Gemfile /home/cbrain/cbrain/Bourreau/
+
+# Bundle bourreau
+RUN source ~/.bashrc && \
+    cd ${HOME}/cbrain/Bourreau                 && \
+    bundle install                             && \
+    cd `bundle show sys-proctable`             && \
+    rake install                               && \
+    echo -e '[[ -s "$HOME/.rvm/scripts/rvm" ]] && source "$HOME/.rvm/scripts/rvm" # Load RVM into a shell session *as a function*\n' >> /home/cbrain/.bashrc
+
+####################
+# CBRAIN code copy #
+####################
+
+COPY *.txt *.md *.sh *.csv /home/cbrain/cbrain/
+COPY Bourreau/ /home/cbrain/cbrain/Bourreau/
+COPY BrainPortal/ /home/cbrain/cbrain/BrainPortal/
+COPY Docker/entry_points/bourreau_bootstrap.sh \
+     Docker/entry_points/bourreau.sh \
+     Docker/entry_points/functions.sh /home/cbrain/cbrain/Docker/entry_points/
+COPY Docker/templates/ /home/cbrain/cbrain/Docker/templates/
+
+USER root
+RUN chown cbrain:cbrain -R /home/cbrain/cbrain
+
+#########################
+# Ports and entry point #
+#########################
+
+EXPOSE 22
+
+ENTRYPOINT ["/home/cbrain/cbrain/Docker/entry_points/bourreau_bootstrap.sh"]
+CMD []
+
+###########
+# Volumes #
+###########
+#
+# /cbrain_data_cache: used by portal to store
+#                     files and an id used for authentication.
+#                     Shouldn't be deleted manually.
+#
+# /home/cbrain/plugins: plugins to add to the cbrain installation.
+#                       Will be installed when the portal
+#                       starts.
+#
+# /home/cbrain/cbrain_task_directories: where the task directories
+#                                       will be stored.
+#
+# /home/cbrain/.portal_ssh: it should contains the public SSH key of CBrain portal.
+#
+
+VOLUME /home/cbrain/cbrain_data_cache \
+       /home/cbrain/.portal_ssh \
+       /home/cbrain/plugins \
+       /home/cbrain/cbrain_task_directories
